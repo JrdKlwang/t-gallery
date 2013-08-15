@@ -312,20 +312,21 @@ class ImageRichLinePatternCollection {
 		}
 	}
 	
-	public boolean isImageListPortrait(ArrayList<ImageCell> images, int aTypes[], int aNum[], int lev){
+	public boolean isImageListPortrait(ArrayList<ImageCell> images, int aTypes[], int aNum[]){
+		//aTypes.length = aNum.length
 		boolean res = true;
 		
 		for(int i = 0; i < images.size(); i++) {
 			int type = getImageType(images.get(i));
 			
-			for(int j = 0; j < lev; j++) {
+			for(int j = 0; j < aTypes.length; j++) {
 				if((aTypes[j] & type) != 0) {
 					aNum[j]--;
 				}
 			}
 		}
 		
-		for(int i = 0; i< lev; i++) {
+		for(int i = 0; i< aNum.length; i++) {
 			if(aNum[i] != 0) {
 				res = false;
 				break;
@@ -337,6 +338,7 @@ class ImageRichLinePatternCollection {
 	
 	public void adjustImageList(ArrayList<ImageCell> images, ArrayList<ImageCell> adjustImages, 
 			int adjustImageType, int baseIndex[]) {
+		//images.size() = baseIndex.length
     	for(int i = 0; i < images.size(); i++) {
     		if((adjustImageType & getImageType(images.get(i))) !=0 ) {
     			int j = i-1;
@@ -356,6 +358,7 @@ class ImageRichLinePatternCollection {
 	}
 	
 	public void restoreImageList(ArrayList<ImageCell> images, ArrayList<ImageCell> adjustImages, int baseIndex[]) {
+		//adjustImages.size() = baseIndex.length
     	for(int i = 0; i < adjustImages.size(); i++) {
     		images.get(baseIndex[i]).outWidth = adjustImages.get(i).outWidth;
     		images.get(baseIndex[i]).outHeight = adjustImages.get(i).outHeight;
@@ -367,6 +370,11 @@ class ImageRichLinePatternCollection {
 	ImageRichLinePatternCollection(){
 		patterns = new ImageRichLinePattern[PATTERN_NUM];
 		availablePatterns = new ArrayList<Integer>();
+		aPatternMatchSum = new int[PATTERN_NUM];
+		
+		for(int i = 0; i < PATTERN_NUM; i++) {
+			aPatternMatchSum[i] = 0;
+		}
 		
 		patterns[0] = new ImageRichLinePattern(){
 						
@@ -1272,7 +1280,7 @@ class ImageRichLinePatternCollection {
                     return -1;
                 }
 
-                if (true == isImageListPortrait(images, aTypes, aNum, 2)){
+                if (true == isImageListPortrait(images, aTypes, aNum)){
                     return 4;
                 }
                 else {
@@ -1335,7 +1343,7 @@ class ImageRichLinePatternCollection {
                     return -1;
                 }
 
-                if (true == isImageListPortrait(images, aTypes, aNum, 2)){
+                if (true == isImageListPortrait(images, aTypes, aNum)){
                     return 4;
                 }
                 else {
@@ -1386,14 +1394,26 @@ class ImageRichLinePatternCollection {
 	}
 	
 	public int checkPattern(ArrayList<ImageCell> images){
-		availablePatterns.clear();
+		int minIndex = 0;
+		ArrayList<Integer> tempPatterns = new ArrayList<Integer>();
 		
 		for (int i=0; i<PATTERN_NUM; i++){
 			if (patterns[i].match(images) != -1){
-				availablePatterns.add(i);
+				tempPatterns.add(i);
+	            if(aPatternMatchSum[i] < aPatternMatchSum[tempPatterns.get(minIndex)]) {
+	            	minIndex = tempPatterns.size()-1;
+	            }
 			}
 		}
-		
+
+		availablePatterns.clear();
+
+        for(int i = 0; i < tempPatterns.size(); i++) {
+            if(aPatternMatchSum[tempPatterns.get(i)] <= aPatternMatchSum[tempPatterns.get(minIndex)]) {
+            	availablePatterns.add(tempPatterns.get(i));
+            }
+        }
+
 		return availablePatterns.size();
 	}
 	
@@ -1409,8 +1429,13 @@ class ImageRichLinePatternCollection {
 		return patterns[availablePatterns.get(index)].layout(images, totalWidth);
 	}
 	
+	public void changePatternMatchSum(int index, int lev){
+		aPatternMatchSum[index]+=lev;
+	}
+	
 	ImageRichLinePattern[] patterns;
 	ArrayList<Integer> availablePatterns;
+	int[] aPatternMatchSum;
 }
 
 class ImageRichLineGroup extends ImageLineGroup{
@@ -1477,6 +1502,7 @@ public class GalleryLayout {
 				line.height = height;
 				addLine(line);
 				lastPattern = patterns.getPatternId(choice);
+				patterns.changePatternMatchSum(lastPattern, 1);
 			}
 			else {
 				ImageSingleLineGroup line = new ImageSingleLineGroup(totalWidth);
