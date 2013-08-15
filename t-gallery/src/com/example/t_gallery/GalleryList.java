@@ -599,11 +599,8 @@ public class GalleryList extends ExpandableListActivity {
 		}
 	}
 	
-	private Bitmap clipSlimFlatImage(int imagePosion, int groupPosition) {
+	private Bitmap clipSlimFlatImage(String path) {
 		Bitmap bitmap = null;
-
-		mImageLists[groupPosition].moveToPosition(imagePosion);
-		String path = mImageLists[groupPosition].getString(mImageLists[groupPosition].getColumnIndex(Media.DATA));
 
 		try {
 			BitmapFactory.Options bitmapFactoryOptions = new BitmapFactory.Options();
@@ -676,17 +673,45 @@ public class GalleryList extends ExpandableListActivity {
 				float height = (float)thumb.getHeight();
 				float width = (float)thumb.getWidth();
 
+				//Crop the image a little if it is TOO slim or TOO flat
 				if((height/width) > Config.MAX_WIDTH_HEIGHT_RATIO ||
 					(width/height) > Config.MAX_WIDTH_HEIGHT_RATIO) {
 
 					thumb.recycle();
-					Bitmap clipBitmap = clipSlimFlatImage(params[3].intValue(), params[4].intValue());
+
+					int groupPosition = params[4].intValue();
+					int imagePosion = params[3].intValue();
+
+					mImageLists[groupPosition].moveToPosition(imagePosion);
+					String path = mImageLists[groupPosition].getString(mImageLists[groupPosition].getColumnIndex(Media.DATA));
+
+					Bitmap clipBitmap = clipSlimFlatImage(path);
 
 					thumb = Bitmap.createScaledBitmap (clipBitmap, params[1].intValue(), params[2].intValue(), false);
 					if(!clipBitmap.isRecycled()){
 						clipBitmap.recycle();
 					}
 				}
+
+				//Load original image instead of thumbnail if we enlarge it too-much
+				float ratio = width / (float) params[1].intValue();
+				if(ratio <= 0.5f) {
+					thumb.recycle();
+
+					int groupPosition = params[4].intValue();
+					int imagePosion = params[3].intValue();
+
+					mImageLists[groupPosition].moveToPosition(imagePosion);
+					String path = mImageLists[groupPosition].getString(mImageLists[groupPosition].getColumnIndex(Media.DATA));
+
+					Bitmap originalBitmap = BitmapFactory.decodeFile(path);
+
+					thumb = Bitmap.createScaledBitmap (originalBitmap, params[1].intValue(), params[2].intValue(), false);
+					if(!originalBitmap.isRecycled()){
+						originalBitmap.recycle();
+					}
+				}
+
 				return thumb;
 				/*int height = thumb.getHeight();
 				int width = thumb.getWidth();
