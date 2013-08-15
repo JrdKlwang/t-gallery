@@ -1,36 +1,38 @@
 package com.example.t_gallery;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
 
-import android.net.Uri;
-import android.os.AsyncTask;
-import android.os.Bundle;
-import android.os.Handler;
-import android.os.Message;
-import android.provider.MediaStore.Images.Media;
-import android.provider.MediaStore.Images.Thumbnails;
-import android.animation.ObjectAnimator;
 import android.app.ExpandableListActivity;
 import android.content.Context;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.BitmapRegionDecoder;
+import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
+import android.provider.MediaStore;
+import android.provider.MediaStore.Images.Media;
+import android.provider.MediaStore.Images.Thumbnails;
 import android.util.Log;
 import android.util.LruCache;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewParent;
 import android.view.ViewPropertyAnimator;
 import android.view.ViewTreeObserver;
 import android.widget.AbsListView;
-import android.widget.AbsListView.OnScrollListener;
 import android.widget.AbsoluteLayout;
 import android.widget.BaseExpandableListAdapter;
 import android.widget.ExpandableListView;
@@ -62,7 +64,7 @@ public class GalleryList extends ExpandableListActivity {
 		static public final Uri MEDIA_URI = Media.EXTERNAL_CONTENT_URI;
 		static public final String ALBUM_PROJECTION[] = {Media.BUCKET_ID, Media.BUCKET_DISPLAY_NAME};
 		static public final String ALBUM_WHERE_CLAUSE = "1) GROUP BY (1"; /*This is a trick to use GROUP BY */
-		static public final String IMAGE_PROJECTION[] = {Media._ID, Media.WIDTH, Media.HEIGHT};
+		static public final String IMAGE_PROJECTION[] = {Media._ID, Media.WIDTH, Media.HEIGHT, Media.DATA};
 		static public final String IMAGE_WHERE_CLAUSE = Media.BUCKET_ID + " = ?";
 		
 		/*UI Effect*/
@@ -70,6 +72,8 @@ public class GalleryList extends ExpandableListActivity {
 		
 		static public final int COLLAPSE_SHORTCUT_ANIM_DURATION = 500;
 		static public final int COLLAPSE_SHORTCUT_STAY_DURATION = 2000;
+
+		static public final float MAX_WIDTH_HEIGHT_RATIO = 4.0f;
 	}
 	
 	private void fetchGalleryList(){
@@ -103,9 +107,18 @@ public class GalleryList extends ExpandableListActivity {
 				long id = mImageLists[i].getLong(mImageLists[i].getColumnIndex(Media._ID));
 				int width = mImageLists[i].getInt(mImageLists[i].getColumnIndex(Media.WIDTH));
 				int height = mImageLists[i].getInt(mImageLists[i].getColumnIndex(Media.HEIGHT));
-				
-				galleryLayout.addImage(id, width, height);
 
+				float ratio = (float)height / (float)width;
+				if(ratio > Config.MAX_WIDTH_HEIGHT_RATIO) {
+					height = (int)(width*Config.MAX_WIDTH_HEIGHT_RATIO);
+				}
+
+				ratio = (float)width / (float)height;
+				if(ratio > Config.MAX_WIDTH_HEIGHT_RATIO) {
+					width = (int)(height*Config.MAX_WIDTH_HEIGHT_RATIO);
+				}
+
+				galleryLayout.addImage(id, width, height, i);
 				mImageLists[i].moveToNext();
 			}
 			galleryLayout.addImageFinish();
@@ -586,6 +599,55 @@ public class GalleryList extends ExpandableListActivity {
 		}
 	}
 	
+	private Bitmap clipSlimFlatImage(int imagePosion, int groupPosition) {
+		Bitmap bitmap = null;
+
+		mImageLists[groupPosition].moveToPosition(imagePosion);
+		String path = mImageLists[groupPosition].getString(mImageLists[groupPosition].getColumnIndex(Media.DATA));
+
+		try {
+			BitmapFactory.Options bitmapFactoryOptions = new BitmapFactory.Options();
+
+			bitmapFactoryOptions.inJustDecodeBounds = true;
+			BitmapFactory.decodeFile(path, bitmapFactoryOptions);
+
+			BitmapRegionDecoder mDecoder = BitmapRegionDecoder.newInstance(path, true);
+
+			if (mDecoder != null) {
+				Rect mRect = new Rect();
+				int height = bitmapFactoryOptions.outHeight;
+				int width = bitmapFactoryOptions.outWidth;
+
+				float ratio = (float)height / (float)width;
+				if(ratio > Config.MAX_WIDTH_HEIGHT_RATIO) {
+					int realHeight = (int)(width*Config.MAX_WIDTH_HEIGHT_RATIO);
+					int left = 0;
+					int top = (height - realHeight) / 2;
+					int right = width;
+					int bottom = top + realHeight;
+
+					mRect.set(left, top, right, bottom);
+				}
+
+				ratio = (float)width / (float)height;
+				if(ratio > Config.MAX_WIDTH_HEIGHT_RATIO) {
+					int realWidth = (int)(height*Config.MAX_WIDTH_HEIGHT_RATIO);
+					int left = (width - realWidth) / 2;
+					int top = 0;
+					int right = left + realWidth;
+					int bottom = height;
+
+					mRect.set(left, top, right, bottom);
+				}
+
+				bitmap = mDecoder.decodeRegion(mRect, null);
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return bitmap;
+	}
+
 	private Cursor mGalleryList;
 	private Cursor mImageLists[];
 	private LruCache<Long, Bitmap> mRamCache;
@@ -610,7 +672,21 @@ public class GalleryList extends ExpandableListActivity {
 			    id = params[0];
 				
 				Bitmap thumb = Thumbnails.getThumbnail(getContentResolver(), id, Thumbnails.MINI_KIND, options);
-				
+
+				float height = (float)thumb.getHeight();
+				float width = (float)thumb.getWidth();
+
+				if((height/width) > Config.MAX_WIDTH_HEIGHT_RATIO ||
+					(width/height) > Config.MAX_WIDTH_HEIGHT_RATIO) {
+
+					thumb.recycle();
+					Bitmap clipBitmap = clipSlimFlatImage(params[3].intValue(), params[4].intValue());
+
+					thumb = Bitmap.createScaledBitmap (clipBitmap, params[1].intValue(), params[2].intValue(), false);
+					if(!clipBitmap.isRecycled()){
+						clipBitmap.recycle();
+					}
+				}
 				return thumb;
 				/*int height = thumb.getHeight();
 				int width = thumb.getWidth();
@@ -744,7 +820,7 @@ public class GalleryList extends ExpandableListActivity {
 	        		}
 	        		else {
 	        			BitmapWorkerTask task = new BitmapWorkerTask(holder.icons[i]);
-					    task.execute(currentLine.getImage(i).id);
+					    task.execute(currentLine.getImage(i).id, (long)image.outWidth, (long)image.outHeight, (long)image.postion, (long)groupPosition);
 					    holder.task[i] = task;
 					    holder.icons[i].setScaleType(ImageView.ScaleType.FIT_XY);
 					    holder.icons[i].setImageResource(R.drawable.grey);	

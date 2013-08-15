@@ -10,8 +10,9 @@ import com.example.t_gallery.GalleryList.Config;
 
 
 class ImageCell {
-	ImageCell(long aId, int aWidth, int aHeight){
+	ImageCell(long aId, int aWidth, int aHeight, int aPostion){
 		id = aId;
+		postion = aPostion;
 	    inWidth = aWidth;
 	    inHeight = aHeight;
 	    yRatio = (float)inHeight / (float)inWidth;
@@ -32,6 +33,7 @@ class ImageCell {
 	
 	
 	public long id = 0;
+	public int postion = 0;
 	
 	public int inWidth = 0;
 	public int inHeight = 0;
@@ -54,8 +56,8 @@ class ImageLineGroup {
 		imageList = new ArrayList<ImageCell>();
 	}
 
-	public void addImage(long id, int width, int height){
-		ImageCell image = new ImageCell(id, width, height);
+	public void addImage(long id, int width, int height, int postion){
+		ImageCell image = new ImageCell(id, width, height, postion);
 		imageList.add(image);
 	}
 	
@@ -1524,9 +1526,9 @@ public class GalleryLayout {
 		}
 	}
 	
-	public void addImage(long id, int width, int height){
+	public void addImage(long id, int width, int height, int postion){
 		
-		itemBuffer.add(new ImageCell(id, width, height));
+		itemBuffer.add(new ImageCell(id, width, height, postion));
 		
 		if (itemBuffer.isFull()){
 			processImageBuffer();
