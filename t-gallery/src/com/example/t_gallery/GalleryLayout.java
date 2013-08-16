@@ -3,7 +3,6 @@ package com.example.t_gallery;
 import java.util.ArrayList;
 import java.util.Random;
 
-import android.graphics.BitmapFactory;
 import android.util.Log;
 
 import com.example.t_gallery.GalleryList.Config;
@@ -314,20 +313,21 @@ class ImageRichLinePatternCollection {
 		}
 	}
 	
-	public boolean isImageListPortrait(ArrayList<ImageCell> images, int aTypes[], int aNum[]){
-		//aTypes.length = aNum.length
+	public boolean isImageListPortrait(ArrayList<ImageCell> images, int aTypes[], int aNum[], int lev){
+		//aTypes.length == aNum.length && lev <= images.size()
 		boolean res = true;
-		
-		for(int i = 0; i < images.size(); i++) {
+
+		for(int i = 0; i < lev; i++) {
 			int type = getImageType(images.get(i));
-			
+
 			for(int j = 0; j < aTypes.length; j++) {
-				if((aTypes[j] & type) != 0) {
+				if(aNum[j] > 0 && (aTypes[j] & type) != 0) {
 					aNum[j]--;
+					break;
 				}
 			}
 		}
-		
+
 		for(int i = 0; i< aNum.length; i++) {
 			if(aNum[i] != 0) {
 				res = false;
@@ -338,25 +338,25 @@ class ImageRichLinePatternCollection {
 		return res;
 	}
 	
-	public void adjustImageList(ArrayList<ImageCell> images, ArrayList<ImageCell> adjustImages, 
-			int adjustImageType, int baseIndex[]) {
-		//images.size() = baseIndex.length
-    	for(int i = 0; i < images.size(); i++) {
-    		if((adjustImageType & getImageType(images.get(i))) !=0 ) {
-    			int j = i-1;
+	public void adjustImageList(ArrayList<ImageCell> images,
+			ArrayList<ImageCell> adjustImages, int baseIndex[]) {
+		// images.size() = baseIndex.length
+		adjustImages.add(images.get(0));
+		baseIndex[0] = 0;
 
-    			while(j >= 0) {
-    				baseIndex[j+1] = baseIndex[j];
-    				j--;
-    			}
-    			baseIndex[0] = i;
-    			adjustImages.add(0, images.get(i));
-    		}
-    		else {
-    			baseIndex[i] = i;
-    			adjustImages.add(images.get(i));
-    		}
-    	}
+		for (int i = 1; i < images.size(); i++) {
+			int j = 0;
+			for (; j < adjustImages.size(); j++) {
+				if (images.get(i).yRatio > adjustImages.get(j).yRatio) {
+					for (int k = adjustImages.size() - 1; k >= j; k--) {
+						baseIndex[k + 1] = baseIndex[k];
+					}
+					break;
+				}
+			}
+			adjustImages.add(j, images.get(i));
+			baseIndex[j] = i;
+		}
 	}
 	
 	public void restoreImageList(ArrayList<ImageCell> images, ArrayList<ImageCell> adjustImages, int baseIndex[]) {
@@ -400,13 +400,17 @@ class ImageRichLinePatternCollection {
 				return 5;
 			}
 
-			public int layout(ArrayList<ImageCell> images, int totalWidth) {		
-				
+			public int layout(ArrayList<ImageCell> images, int totalWidth) {
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[5];
+
+				adjustImageList(images, adjustImages, baseIndex);
+
 				float matrix[][] = {
-						{images.get(0).yRatio, -images.get(1).yRatio, 0, 0, 0, 0},
-						{0, 0, 0, images.get(3).yRatio, -images.get(4).yRatio, 0},
-						{-images.get(0).yRatio, 0, images.get(2).yRatio, -images.get(3).yRatio, 0, 2*Config.THUMBNAIL_PADDING},
-						{1, 1, 0, -1, -1,0},
+						{0, adjustImages.get(1).yRatio, -adjustImages.get(2).yRatio, 0, 0, 0},
+						{0, 0, 0, adjustImages.get(3).yRatio, -adjustImages.get(4).yRatio, 0},
+						{adjustImages.get(0).yRatio, -adjustImages.get(1).yRatio, 0, -adjustImages.get(3).yRatio, 0, 2*Config.THUMBNAIL_PADDING},
+						{0, 1, 1, -1, -1,0},
 						{1, 1, 1, 0, 0, totalWidth-6*Config.THUMBNAIL_PADDING},
 				};
 				
@@ -415,29 +419,30 @@ class ImageRichLinePatternCollection {
 				calcMatrix(matrix, widths, 5);
 				
 				for (int i=0; i<5; i++){
-					ImageCell image = images.get(i);
+					ImageCell image = adjustImages.get(i);
 					image.outWidth = (int)widths[i];
 					image.outHeight = (int)(image.outWidth * image.yRatio);
 				}
 				
-				images.get(0).outX = 0;
-				images.get(0).outY = 0;
+				adjustImages.get(1).outX = 0;
+				adjustImages.get(1).outY = 0;
 				
-				images.get(1).outX = images.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
-				images.get(1).outY = 0;
+				adjustImages.get(2).outX = adjustImages.get(1).outWidth+2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(2).outY = 0;
 				
-				images.get(2).outX = images.get(1).outX + images.get(1).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(2).outY = 0;
+				adjustImages.get(0).outX = adjustImages.get(2).outX + adjustImages.get(2).outWidth + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(0).outY = 0;
 				
-				images.get(3).outX = 0;
-				images.get(3).outY = images.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(3).outX = 0;
+				adjustImages.get(3).outY = adjustImages.get(1).outHeight + 2*Config.THUMBNAIL_PADDING;
 				
-				images.get(4).outX = images.get(3).outX + images.get(3).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(4).outY = images.get(3).outY;
+				adjustImages.get(4).outX = adjustImages.get(3).outX + adjustImages.get(3).outWidth + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(4).outY = adjustImages.get(3).outY;
 				
-				return images.get(2).outHeight + 2*Config.THUMBNAIL_PADDING;
+				restoreImageList(images, adjustImages, baseIndex);
+
+				return adjustImages.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
 			};
-			
 		};
 		
 		patterns[1] = new ImageRichLinePattern(){
@@ -462,11 +467,15 @@ class ImageRichLinePatternCollection {
 			}
 
 			public int layout(ArrayList<ImageCell> images, int totalWidth) {		
-				
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[5];
+
+				adjustImageList(images, adjustImages, baseIndex);
+
 				float matrix[][] = {
-						{0, images.get(1).yRatio, -images.get(2).yRatio, 0, 0, 0},
-						{0, 0, 0, images.get(3).yRatio, -images.get(4).yRatio, 0},
-						{images.get(0).yRatio, -images.get(1).yRatio, 0, -images.get(3).yRatio, 0, 2*Config.THUMBNAIL_PADDING},
+						{0, adjustImages.get(1).yRatio, -adjustImages.get(2).yRatio, 0, 0, 0},
+						{0, 0, 0, adjustImages.get(3).yRatio, -adjustImages.get(4).yRatio, 0},
+						{adjustImages.get(0).yRatio, -adjustImages.get(1).yRatio, 0, -adjustImages.get(3).yRatio, 0, 2*Config.THUMBNAIL_PADDING},
 						{0, 1, 1, -1, -1,0},
 						{1, 1, 1, 0, 0, totalWidth-6*Config.THUMBNAIL_PADDING},
 				};
@@ -476,29 +485,30 @@ class ImageRichLinePatternCollection {
 				calcMatrix(matrix, widths, 5);
 				
 				for (int i=0; i<5; i++){
-					ImageCell image = images.get(i);
+					ImageCell image = adjustImages.get(i);
 					image.outWidth = (int)widths[i];
 					image.outHeight = (int)(image.outWidth * image.yRatio);
 				}
 				
-				images.get(0).outX = 0;
-				images.get(0).outY = 0;
+				adjustImages.get(0).outX = 0;
+				adjustImages.get(0).outY = 0;
 				
-				images.get(1).outX = images.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
-				images.get(1).outY = 0;
+				adjustImages.get(1).outX = adjustImages.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(1).outY = 0;
 				
-				images.get(2).outX = images.get(1).outX + images.get(1).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(2).outY = 0;
+				adjustImages.get(2).outX = adjustImages.get(1).outX + adjustImages.get(1).outWidth + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(2).outY = 0;
 				
-				images.get(3).outX = images.get(1).outX;
-				images.get(3).outY = images.get(1).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(3).outX = adjustImages.get(1).outX;
+				adjustImages.get(3).outY = adjustImages.get(1).outHeight + 2*Config.THUMBNAIL_PADDING;
 				
-				images.get(4).outX = images.get(3).outX + images.get(3).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(4).outY = images.get(3).outY;
+				adjustImages.get(4).outX = adjustImages.get(3).outX + adjustImages.get(3).outWidth + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(4).outY = adjustImages.get(3).outY;
 				
-				return images.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
+				restoreImageList(images, adjustImages, baseIndex);
+
+				return adjustImages.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
 			};
-			
 		};
 		
 		patterns[2] = new ImageRichLinePattern(){
@@ -522,13 +532,17 @@ class ImageRichLinePatternCollection {
 				return 5;
 			}
 
-			public int layout(ArrayList<ImageCell> images, int totalWidth) {		
+			public int layout(ArrayList<ImageCell> images, int totalWidth) {
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[5];
+
+				adjustImageList(images, adjustImages, baseIndex);
 				
 				float matrix[][] = {
-						{-images.get(0).yRatio, images.get(1).yRatio, 0, -images.get(3).yRatio, 0, 2*Config.THUMBNAIL_PADDING},
-						{0, images.get(1).yRatio, -images.get(2).yRatio, 0, -images.get(4).yRatio, 2*Config.THUMBNAIL_PADDING},
+						{adjustImages.get(0).yRatio, -adjustImages.get(1).yRatio, 0, -adjustImages.get(3).yRatio, 0, 2*Config.THUMBNAIL_PADDING},
+						{adjustImages.get(0).yRatio, 0, -adjustImages.get(2).yRatio, 0, -adjustImages.get(4).yRatio, 2*Config.THUMBNAIL_PADDING},
 						{0, 0, 1, 0, -1, 0},
-						{1, 0, 0, -1, 0, 0},
+						{0, 1, 0, -1, 0, 0},
 						{1, 1, 1, 0, 0, totalWidth-6*Config.THUMBNAIL_PADDING},
 				};
 				
@@ -537,27 +551,29 @@ class ImageRichLinePatternCollection {
 				calcMatrix(matrix, widths, 5);
 				
 				for (int i=0; i<5; i++){
-					ImageCell image = images.get(i);
+					ImageCell image = adjustImages.get(i);
 					image.outWidth = (int)widths[i];
 					image.outHeight = (int)(image.outWidth * image.yRatio);
 				}
 				
-				images.get(0).outX = 0;
-				images.get(0).outY = 0;
+				adjustImages.get(1).outX = 0;
+				adjustImages.get(1).outY = 0;
 				
-				images.get(1).outX = images.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
-				images.get(1).outY = 0;
+				adjustImages.get(0).outX = adjustImages.get(1).outWidth+2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(0).outY = 0;
 				
-				images.get(2).outX = images.get(1).outX + images.get(1).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(2).outY = 0;
+				adjustImages.get(2).outX = adjustImages.get(0).outX + adjustImages.get(0).outWidth + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(2).outY = 0;
 				
-				images.get(3).outX = 0;
-				images.get(3).outY = images.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(3).outX = 0;
+				adjustImages.get(3).outY = adjustImages.get(1).outHeight + 2*Config.THUMBNAIL_PADDING;
 				
-				images.get(4).outX = images.get(2).outX;
-				images.get(4).outY = images.get(2).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(4).outX = adjustImages.get(2).outX;
+				adjustImages.get(4).outY = adjustImages.get(2).outHeight + 2*Config.THUMBNAIL_PADDING;
 				
-				return images.get(1).outHeight + 2*Config.THUMBNAIL_PADDING;
+				restoreImageList(images, adjustImages, baseIndex);
+
+				return adjustImages.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
 			};
 			
 		};
@@ -568,16 +584,14 @@ class ImageRichLinePatternCollection {
 			}
 
 			public int match(ArrayList<ImageCell> images) {
-				
 				if (images.size() < 4){
 					return -1;
 				}
-				
-				if ((IMAGE_PORTRAIT == getImageType(images.get(0)) || IMAGE_SLIM == getImageType(images.get(0))) && 
-						IMAGE_LANDSCAPE == getImageType(images.get(1)) &&
-						(IMAGE_SLIM != getImageType(images.get(2)) && IMAGE_PANORAMA != getImageType(images.get(2))) && 
-						(IMAGE_SLIM != getImageType(images.get(3)) && IMAGE_PANORAMA != getImageType(images.get(3)))
-						){
+
+                int aTypes[] = {IMAGE_LANDSCAPE,  IMAGE_SQUARE | IMAGE_PORTRAIT, IMAGE_PORTRAIT | IMAGE_SLIM};
+                int aNum[] = {1, 2, 1};
+
+                if (true == isImageListPortrait(images, aTypes, aNum, 4)){
 					return 4;
 				}
 				else {
@@ -585,13 +599,18 @@ class ImageRichLinePatternCollection {
 				}
 			}
 
-			public int layout(ArrayList<ImageCell> images, int totalWidth) {		
+			public int layout(ArrayList<ImageCell> images, int totalWidth) {
+
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[4];
+
+				adjustImageList(images, adjustImages, baseIndex);
 				
 				float matrix[][] = {
-						{0, 0, images.get(2).yRatio, -images.get(3).yRatio, 0},
-						{0, 1, -1, -1, 2*Config.THUMBNAIL_PADDING},
-						{images.get(0).yRatio, -images.get(1).yRatio, -images.get(2).yRatio, 0, 2*Config.THUMBNAIL_PADDING},
-						{1, 1, 0, 0, totalWidth-4*Config.THUMBNAIL_PADDING},
+						{0, adjustImages.get(1).yRatio, -adjustImages.get(2).yRatio, 0, 0},
+						{0, -1, -1, 1, 2*Config.THUMBNAIL_PADDING},
+						{adjustImages.get(0).yRatio, -adjustImages.get(1).yRatio, 0, -adjustImages.get(3).yRatio, 2*Config.THUMBNAIL_PADDING},
+						{1, 0, 0, 1, totalWidth-4*Config.THUMBNAIL_PADDING},
 				};
 				
 				float widths[] = new float[4];
@@ -599,26 +618,27 @@ class ImageRichLinePatternCollection {
 				calcMatrix(matrix, widths, 4);
 				
 				for (int i=0; i<4; i++){
-					ImageCell image = images.get(i);
+					ImageCell image = adjustImages.get(i);
 					image.outWidth = (int)widths[i];
 					image.outHeight = (int)(image.outWidth * image.yRatio);
 				}
 				
-				images.get(0).outX = 0;
-				images.get(0).outY = 0;
+				adjustImages.get(0).outX = 0;
+				adjustImages.get(0).outY = 0;
 				
-				images.get(1).outX = images.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
-				images.get(1).outY = 0;
+				adjustImages.get(3).outX = adjustImages.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(3).outY = 0;
 				
-				images.get(2).outX = images.get(0).outX + images.get(0).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(2).outY = images.get(1).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(1).outX = adjustImages.get(3).outX;
+				adjustImages.get(1).outY = adjustImages.get(3).outHeight + 2*Config.THUMBNAIL_PADDING;
 				
-				images.get(3).outX = images.get(2).outX + images.get(2).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(3).outY = images.get(2).outY;
+				adjustImages.get(2).outX = adjustImages.get(1).outX + adjustImages.get(1).outWidth + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(2).outY = adjustImages.get(1).outY;
 				
-				return images.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
+				restoreImageList(images, adjustImages, baseIndex);
+
+				return adjustImages.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
 			};
-			
 		};
 		
 		patterns[4] = new ImageRichLinePattern(){
@@ -631,12 +651,11 @@ class ImageRichLinePatternCollection {
 				if (images.size() < 4){
 					return -1;
 				}
-				
-				if ((IMAGE_PORTRAIT == getImageType(images.get(0)) || IMAGE_SLIM == getImageType(images.get(0))) && 
-					IMAGE_LANDSCAPE == getImageType(images.get(3)) &&
-					(IMAGE_SLIM != getImageType(images.get(1)) && IMAGE_PANORAMA != getImageType(images.get(1))) && 
-					(IMAGE_SLIM != getImageType(images.get(2)) && IMAGE_PANORAMA != getImageType(images.get(2)))
-					){
+
+                int aTypes[] = {IMAGE_LANDSCAPE,  IMAGE_SQUARE | IMAGE_PORTRAIT, IMAGE_PORTRAIT | IMAGE_SLIM};
+                int aNum[] = {1, 2, 1};
+
+                if (true == isImageListPortrait(images, aTypes, aNum, 4)){
 					return 4;
 				}
 				else {
@@ -644,12 +663,17 @@ class ImageRichLinePatternCollection {
 				}
 			}
 
-			public int layout(ArrayList<ImageCell> images, int totalWidth) {		
+			public int layout(ArrayList<ImageCell> images, int totalWidth) {
+
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[4];
+
+				adjustImageList(images, adjustImages, baseIndex);
 				
 				float matrix[][] = {
-						{0, images.get(1).yRatio, -images.get(2).yRatio, 0, 0},
+						{0, adjustImages.get(1).yRatio, -adjustImages.get(2).yRatio, 0, 0},
 						{0, -1, -1, 1, 2*Config.THUMBNAIL_PADDING},
-						{images.get(0).yRatio, -images.get(1).yRatio, 0, -images.get(3).yRatio, 2*Config.THUMBNAIL_PADDING},
+						{adjustImages.get(0).yRatio, -adjustImages.get(1).yRatio, 0, -adjustImages.get(3).yRatio, 2*Config.THUMBNAIL_PADDING},
 						{1, 0, 0, 1, totalWidth-4*Config.THUMBNAIL_PADDING},
 				};
 				
@@ -658,26 +682,27 @@ class ImageRichLinePatternCollection {
 				calcMatrix(matrix, widths, 4);
 				
 				for (int i=0; i<4; i++){
-					ImageCell image = images.get(i);
+					ImageCell image = adjustImages.get(i);
 					image.outWidth = (int)widths[i];
 					image.outHeight = (int)(image.outWidth * image.yRatio);
 				}
 				
-				images.get(0).outX = 0;
-				images.get(0).outY = 0;
+				adjustImages.get(0).outX = 0;
+				adjustImages.get(0).outY = 0;
 				
-				images.get(1).outX = images.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
-				images.get(1).outY = 0;
+				adjustImages.get(1).outX = adjustImages.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(1).outY = 0;
 				
-				images.get(2).outX = images.get(1).outX + images.get(1).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(2).outY = 0;
+				adjustImages.get(2).outX = adjustImages.get(1).outX+adjustImages.get(1).outWidth+2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(2).outY = 0;
 				
-				images.get(3).outX = images.get(1).outX;
-				images.get(3).outY = images.get(1).outY + images.get(1).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(3).outX = adjustImages.get(1).outX;
+				adjustImages.get(3).outY = adjustImages.get(1).outHeight+2*Config.THUMBNAIL_PADDING;
 				
-				return images.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
+				restoreImageList(images, adjustImages, baseIndex);
+
+				return adjustImages.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
 			};
-			
 		};
 		
 		patterns[5] = new ImageRichLinePattern(){
@@ -690,12 +715,11 @@ class ImageRichLinePatternCollection {
 				if (images.size() < 4){
 					return -1;
 				}
-				
-				if ((IMAGE_PORTRAIT == getImageType(images.get(1)) || IMAGE_SLIM == getImageType(images.get(1))) && 
-						IMAGE_LANDSCAPE == getImageType(images.get(0)) &&
-						(IMAGE_SLIM != getImageType(images.get(2)) && IMAGE_PANORAMA != getImageType(images.get(2))) && 
-						(IMAGE_SLIM != getImageType(images.get(3)) && IMAGE_PANORAMA != getImageType(images.get(3)))
-						){
+
+                int aTypes[] = {IMAGE_LANDSCAPE,  IMAGE_SQUARE | IMAGE_PORTRAIT, IMAGE_PORTRAIT | IMAGE_SLIM};
+                int aNum[] = {1, 2, 1};
+
+                if (true == isImageListPortrait(images, aTypes, aNum, 4)){
 					return 4;
 				}
 				else {
@@ -703,13 +727,18 @@ class ImageRichLinePatternCollection {
 				}
 			}
 
-			public int layout(ArrayList<ImageCell> images, int totalWidth) {		
+			public int layout(ArrayList<ImageCell> images, int totalWidth) {
+
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[4];
+
+				adjustImageList(images, adjustImages, baseIndex);
 				
 				float matrix[][] = {
-						{0, 0, images.get(2).yRatio, -images.get(3).yRatio, 0},
-						{1, 0, -1, -1, 2*Config.THUMBNAIL_PADDING},
-						{-images.get(0).yRatio, images.get(1).yRatio, -images.get(2).yRatio, 0, 2*Config.THUMBNAIL_PADDING},
-						{1, 1, 0, 0, totalWidth-4*Config.THUMBNAIL_PADDING},
+						{0, adjustImages.get(1).yRatio, -adjustImages.get(2).yRatio, 0, 0},
+						{0, -1, -1, 1, 2*Config.THUMBNAIL_PADDING},
+						{adjustImages.get(0).yRatio, -adjustImages.get(1).yRatio, 0, -adjustImages.get(3).yRatio, 2*Config.THUMBNAIL_PADDING},
+						{1, 0, 0, 1, totalWidth-4*Config.THUMBNAIL_PADDING},
 				};
 				
 				float widths[] = new float[4];
@@ -717,26 +746,27 @@ class ImageRichLinePatternCollection {
 				calcMatrix(matrix, widths, 4);
 				
 				for (int i=0; i<4; i++){
-					ImageCell image = images.get(i);
+					ImageCell image = adjustImages.get(i);
 					image.outWidth = (int)widths[i];
 					image.outHeight = (int)(image.outWidth * image.yRatio);
 				}
 				
-				images.get(0).outX = 0;
-				images.get(0).outY = 0;
+				adjustImages.get(3).outX = 0;
+				adjustImages.get(3).outY = 0;
 				
-				images.get(1).outX = images.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
-				images.get(1).outY = 0;
+				adjustImages.get(0).outX = adjustImages.get(3).outWidth+2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(0).outY = 0;
 				
-				images.get(2).outX = 0;
-				images.get(2).outY = images.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(1).outX = 0;
+				adjustImages.get(1).outY = adjustImages.get(3).outHeight+2*Config.THUMBNAIL_PADDING;
 				
-				images.get(3).outX = images.get(2).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(3).outY = images.get(2).outY;
+				adjustImages.get(2).outX = adjustImages.get(1).outWidth+2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(2).outY = adjustImages.get(1).outY;
 				
-				return images.get(1).outHeight + 2*Config.THUMBNAIL_PADDING;
+				restoreImageList(images, adjustImages, baseIndex);
+
+				return adjustImages.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
 			};
-			
 		};
 		
 		patterns[6] = new ImageRichLinePattern(){
@@ -749,12 +779,11 @@ class ImageRichLinePatternCollection {
 				if (images.size() < 4){
 					return -1;
 				}
-				
-				if ((IMAGE_PORTRAIT == getImageType(images.get(2)) || IMAGE_SLIM == getImageType(images.get(2))) && 
-						IMAGE_LANDSCAPE == getImageType(images.get(3)) &&
-						(IMAGE_SLIM != getImageType(images.get(0)) && IMAGE_PANORAMA != getImageType(images.get(0))) && 
-						(IMAGE_SLIM != getImageType(images.get(1)) && IMAGE_PANORAMA != getImageType(images.get(1)))
-						){
+
+                int aTypes[] = {IMAGE_LANDSCAPE,  IMAGE_SQUARE | IMAGE_PORTRAIT, IMAGE_PORTRAIT | IMAGE_SLIM};
+                int aNum[] = {1, 2, 1};
+
+                if (true == isImageListPortrait(images, aTypes, aNum, 4)){
 					return 4;
 				}
 				else {
@@ -763,12 +792,17 @@ class ImageRichLinePatternCollection {
 			}
 
 			public int layout(ArrayList<ImageCell> images, int totalWidth) {		
+
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[4];
+
+				adjustImageList(images, adjustImages, baseIndex);
 				
 				float matrix[][] = {
-						{images.get(0).yRatio, -images.get(1).yRatio, 0, 0, 0},
-						{-1, -1, 0, 1, 2*Config.THUMBNAIL_PADDING},
-						{-images.get(0).yRatio, 0, images.get(2).yRatio, -images.get(3).yRatio, 2*Config.THUMBNAIL_PADDING},
-						{0, 0, 1, 1, totalWidth-4*Config.THUMBNAIL_PADDING},
+						{0, adjustImages.get(1).yRatio, -adjustImages.get(2).yRatio, 0, 0},
+						{0, -1, -1, 1, 2*Config.THUMBNAIL_PADDING},
+						{adjustImages.get(0).yRatio, -adjustImages.get(1).yRatio, 0, -adjustImages.get(3).yRatio, 2*Config.THUMBNAIL_PADDING},
+						{1, 0, 0, 1, totalWidth-4*Config.THUMBNAIL_PADDING},
 				};
 				
 				float widths[] = new float[4];
@@ -776,26 +810,27 @@ class ImageRichLinePatternCollection {
 				calcMatrix(matrix, widths, 4);
 				
 				for (int i=0; i<4; i++){
-					ImageCell image = images.get(i);
+					ImageCell image = adjustImages.get(i);
 					image.outWidth = (int)widths[i];
 					image.outHeight = (int)(image.outWidth * image.yRatio);
 				}
 				
-				images.get(0).outX = 0;
-				images.get(0).outY = 0;
+				adjustImages.get(1).outX = 0;
+				adjustImages.get(1).outY = 0;
 				
-				images.get(1).outX = images.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
-				images.get(1).outY = 0;
+				adjustImages.get(2).outX = adjustImages.get(1).outWidth+2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(2).outY = 0;
 				
-				images.get(2).outX = images.get(1).outX + images.get(1).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(2).outY = 0;
+				adjustImages.get(0).outX = adjustImages.get(2).outX+adjustImages.get(2).outWidth+2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(0).outY = 0;
 				
-				images.get(3).outX = 0;
-				images.get(3).outY = images.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
-				
-				return images.get(2).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(3).outX = 0;
+				adjustImages.get(3).outY = adjustImages.get(1).outHeight+2*Config.THUMBNAIL_PADDING;
+
+				restoreImageList(images, adjustImages, baseIndex);
+
+				return adjustImages.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
 			};
-			
 		};
 		
 		patterns[7] = new ImageRichLinePattern(){
@@ -809,9 +844,10 @@ class ImageRichLinePatternCollection {
 					return -1;
 				}
 				
-				if ((IMAGE_PORTRAIT == getImageType(images.get(0)) || IMAGE_SLIM == getImageType(images.get(0))) && 
-					(IMAGE_LANDSCAPE == getImageType(images.get(1)) || IMAGE_SQUARE == getImageType(images.get(1))) &&
-					(IMAGE_LANDSCAPE == getImageType(images.get(2)) || IMAGE_SQUARE == getImageType(images.get(2)))){
+                int aTypes[] = {IMAGE_LANDSCAPE | IMAGE_SQUARE, IMAGE_PORTRAIT | IMAGE_SLIM};
+                int aNum[] = {2, 1};
+
+                if (true == isImageListPortrait(images, aTypes, aNum, 3)){
 					return 3;
 				}
 				else {
@@ -820,10 +856,15 @@ class ImageRichLinePatternCollection {
 			}
 
 			public int layout(ArrayList<ImageCell> images, int totalWidth) {		
-				
+
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[3];
+
+				adjustImageList(images, adjustImages, baseIndex);
+
 				float matrix[][] = {
 						{0, 1, -1, 0},
-						{images.get(0).yRatio, -images.get(1).yRatio, -images.get(2).yRatio, 2*Config.THUMBNAIL_PADDING},
+						{adjustImages.get(0).yRatio, -adjustImages.get(1).yRatio, -adjustImages.get(2).yRatio, 2*Config.THUMBNAIL_PADDING},
 						{1, 1, 0, totalWidth-4*Config.THUMBNAIL_PADDING},
 				};
 				
@@ -832,23 +873,24 @@ class ImageRichLinePatternCollection {
 				calcMatrix(matrix, widths, 3);
 				
 				for (int i=0; i<3; i++){
-					ImageCell image = images.get(i);
+					ImageCell image = adjustImages.get(i);
 					image.outWidth = (int)widths[i];
 					image.outHeight = (int)(image.outWidth * image.yRatio);
 				}
 				
-				images.get(0).outX = 0;
-				images.get(0).outY = 0;
+				adjustImages.get(0).outX = 0;
+				adjustImages.get(0).outY = 0;
 				
-				images.get(1).outX = images.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
-				images.get(1).outY = 0;
+				adjustImages.get(1).outX = adjustImages.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(1).outY = 0;
 				
-				images.get(2).outX = images.get(1).outX;
-				images.get(2).outY = images.get(1).outHeight + 2*Config.THUMBNAIL_PADDING;
-				
-				return images.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
-			};
-			
+				adjustImages.get(2).outX = adjustImages.get(1).outX;
+				adjustImages.get(2).outY = adjustImages.get(1).outHeight + 2*Config.THUMBNAIL_PADDING;
+
+				restoreImageList(images, adjustImages, baseIndex);
+
+				return adjustImages.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
+			};	
 		};
 		
 		patterns[8] = new ImageRichLinePattern(){
@@ -861,10 +903,11 @@ class ImageRichLinePatternCollection {
 				if (images.size() < 3){
 					return -1;
 				}
-				
-				if ((IMAGE_PORTRAIT == getImageType(images.get(1)) || IMAGE_SLIM == getImageType(images.get(1))) && 
-						(IMAGE_LANDSCAPE == getImageType(images.get(0)) || IMAGE_SQUARE == getImageType(images.get(0))) &&
-						(IMAGE_LANDSCAPE == getImageType(images.get(2)) || IMAGE_SQUARE == getImageType(images.get(2)))){
+
+                int aTypes[] = {IMAGE_LANDSCAPE | IMAGE_SQUARE, IMAGE_PORTRAIT | IMAGE_SLIM};
+                int aNum[] = {2, 1};
+
+                if (true == isImageListPortrait(images, aTypes, aNum, 3)){
 					return 3;
 				}
 				else {
@@ -874,9 +917,14 @@ class ImageRichLinePatternCollection {
 
 			public int layout(ArrayList<ImageCell> images, int totalWidth) {		
 				
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[3];
+
+				adjustImageList(images, adjustImages, baseIndex);
+
 				float matrix[][] = {
-						{1, 0, -1, 0},
-						{-images.get(0).yRatio, images.get(1).yRatio, -images.get(2).yRatio, 2*Config.THUMBNAIL_PADDING},
+						{0, 1, -1, 0},
+						{adjustImages.get(0).yRatio, -adjustImages.get(1).yRatio, -adjustImages.get(2).yRatio, 2*Config.THUMBNAIL_PADDING},
 						{1, 1, 0, totalWidth-4*Config.THUMBNAIL_PADDING},
 				};
 				
@@ -885,23 +933,24 @@ class ImageRichLinePatternCollection {
 				calcMatrix(matrix, widths, 3);
 				
 				for (int i=0; i<3; i++){
-					ImageCell image = images.get(i);
+					ImageCell image = adjustImages.get(i);
 					image.outWidth = (int)widths[i];
 					image.outHeight = (int)(image.outWidth * image.yRatio);
 				}
+
+				adjustImages.get(1).outX = 0;
+				adjustImages.get(1).outY = 0;
 				
-				images.get(0).outX = 0;
-				images.get(0).outY = 0;
+				adjustImages.get(2).outX = 0;
+				adjustImages.get(2).outY = adjustImages.get(1).outHeight + 2*Config.THUMBNAIL_PADDING;
 				
-				images.get(1).outX = images.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
-				images.get(1).outY = 0;
-				
-				images.get(2).outX = 0;
-				images.get(2).outY = images.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
-				
-				return images.get(1).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(0).outX = adjustImages.get(1).outWidth + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(0).outY = 0;
+
+				restoreImageList(images, adjustImages, baseIndex);
+
+				return adjustImages.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
 			};
-			
 		};
 		
 		patterns[9] = new ImageRichLinePattern(){
@@ -926,11 +975,16 @@ class ImageRichLinePatternCollection {
 
 			public int layout(ArrayList<ImageCell> images, int totalWidth) {		
 				
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[5];
+
+				adjustImageList(images, adjustImages, baseIndex);
+				
 				float matrix[][] = {
 						{1, -1, 0, 0, 0, 0},
 						{0, 0, 1, -1, 0, 0},
 						{0, 0, 1, 0, -1, 0},
-						{images.get(0).yRatio, images.get(1).yRatio, -images.get(2).yRatio, -images.get(3).yRatio, -images.get(4).yRatio, 2*Config.THUMBNAIL_PADDING},
+						{adjustImages.get(0).yRatio, adjustImages.get(1).yRatio, -adjustImages.get(2).yRatio, -adjustImages.get(3).yRatio, -adjustImages.get(4).yRatio, 2*Config.THUMBNAIL_PADDING},
 						{1, 0, 1, 0, 0, totalWidth - 4*Config.THUMBNAIL_PADDING},
 				};
 				
@@ -939,29 +993,30 @@ class ImageRichLinePatternCollection {
 				calcMatrix(matrix, widths, 5);
 				
 				for (int i=0; i<5; i++){
-					ImageCell image = images.get(i);
+					ImageCell image = adjustImages.get(i);
 					image.outWidth = (int)widths[i];
 					image.outHeight = (int)(image.outWidth * image.yRatio);
 				}
 				
-				images.get(0).outX = 0;
-				images.get(0).outY = 0;
+				adjustImages.get(0).outX = 0;
+				adjustImages.get(0).outY = 0;
 				
-				images.get(1).outX = 0;
-				images.get(1).outY = images.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(1).outX = 0;
+				adjustImages.get(1).outY = adjustImages.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
 				
-				images.get(2).outX = images.get(0).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(2).outY = 0;
+				adjustImages.get(2).outX = adjustImages.get(0).outWidth + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(2).outY = 0;
 				
-				images.get(3).outX = images.get(2).outX;
-				images.get(3).outY = images.get(2).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(3).outX = adjustImages.get(2).outX;
+				adjustImages.get(3).outY = adjustImages.get(2).outHeight + 2*Config.THUMBNAIL_PADDING;
 				
-				images.get(4).outX = images.get(2).outX;
-				images.get(4).outY = images.get(3).outY + images.get(3).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(4).outX = adjustImages.get(2).outX;
+				adjustImages.get(4).outY = adjustImages.get(3).outY + adjustImages.get(3).outHeight + 2*Config.THUMBNAIL_PADDING;
 				
-				return images.get(0).outHeight + images.get(1).outHeight + 4*Config.THUMBNAIL_PADDING;
+				restoreImageList(images, adjustImages, baseIndex);
+				
+				return adjustImages.get(0).outHeight + adjustImages.get(1).outHeight + 4*Config.THUMBNAIL_PADDING;
 			};
-			
 		};
 		
 		patterns[10] = new ImageRichLinePattern(){
@@ -986,12 +1041,17 @@ class ImageRichLinePatternCollection {
 
 			public int layout(ArrayList<ImageCell> images, int totalWidth) {		
 				
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[5];
+
+				adjustImageList(images, adjustImages, baseIndex);
+				
 				float matrix[][] = {
-						{0, 0, 0, 1, -1, 0},
 						{1, -1, 0, 0, 0, 0},
-						{1, 0, -1, 0, 0, 0},
-						{-images.get(0).yRatio, -images.get(1).yRatio, -images.get(2).yRatio, images.get(3).yRatio, images.get(4).yRatio, 2*Config.THUMBNAIL_PADDING},
-						{1, 0, 0, 1, 0, totalWidth - 4*Config.THUMBNAIL_PADDING},
+						{0, 0, 1, -1, 0, 0},
+						{0, 0, 1, 0, -1, 0},
+						{adjustImages.get(0).yRatio, adjustImages.get(1).yRatio, -adjustImages.get(2).yRatio, -adjustImages.get(3).yRatio, -adjustImages.get(4).yRatio, 2*Config.THUMBNAIL_PADDING},
+						{1, 0, 1, 0, 0, totalWidth - 4*Config.THUMBNAIL_PADDING},
 				};
 				
 				float widths[] = new float[5];
@@ -999,29 +1059,30 @@ class ImageRichLinePatternCollection {
 				calcMatrix(matrix, widths, 5);
 				
 				for (int i=0; i<5; i++){
-					ImageCell image = images.get(i);
+					ImageCell image = adjustImages.get(i);
 					image.outWidth = (int)widths[i];
 					image.outHeight = (int)(image.outWidth * image.yRatio);
 				}
+
+				adjustImages.get(2).outX = 0;
+				adjustImages.get(2).outY = 0;
+
+				adjustImages.get(3).outX = 0;
+				adjustImages.get(3).outY = adjustImages.get(2).outHeight + 2*Config.THUMBNAIL_PADDING;
+
+				adjustImages.get(4).outX = 0;
+				adjustImages.get(4).outY = adjustImages.get(3).outY + adjustImages.get(3).outHeight + 2*Config.THUMBNAIL_PADDING;
+
+				adjustImages.get(0).outX = adjustImages.get(2).outWidth + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(0).outY = 0;
+
+				adjustImages.get(1).outX = adjustImages.get(0).outX;
+				adjustImages.get(1).outY = adjustImages.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
+
+				restoreImageList(images, adjustImages, baseIndex);
 				
-				images.get(0).outX = 0;
-				images.get(0).outY = 0;
-				
-				images.get(1).outX = 0;
-				images.get(1).outY = images.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
-				
-				images.get(2).outX = 0;
-				images.get(2).outY = images.get(1).outY + images.get(1).outHeight + 2*Config.THUMBNAIL_PADDING;
-				
-				images.get(3).outX = images.get(0).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(3).outY = 0;
-				
-				images.get(4).outX = images.get(3).outX;
-				images.get(4).outY = images.get(3).outHeight + 2*Config.THUMBNAIL_PADDING;
-				
-				return images.get(3).outHeight + images.get(4).outHeight + 4*Config.THUMBNAIL_PADDING;
+				return adjustImages.get(0).outHeight + adjustImages.get(1).outHeight + 4*Config.THUMBNAIL_PADDING;
 			};
-			
 		};
 		
 		patterns[11] = new ImageRichLinePattern(){
@@ -1034,11 +1095,11 @@ class ImageRichLinePatternCollection {
 				if (images.size() < 4){
 					return -1;
 				}
-				
-				if ((IMAGE_PORTRAIT == getImageType(images.get(0)) || IMAGE_SLIM == getImageType(images.get(0))) && 
-					(IMAGE_PORTRAIT == getImageType(images.get(1)) || IMAGE_SLIM == getImageType(images.get(1))) &&
-					(IMAGE_LANDSCAPE == getImageType(images.get(2)) || IMAGE_SQUARE == getImageType(images.get(2))) &&
-					(IMAGE_LANDSCAPE == getImageType(images.get(3)) || IMAGE_SQUARE == getImageType(images.get(3)))){
+
+                int aTypes[] = {IMAGE_LANDSCAPE, IMAGE_PORTRAIT | IMAGE_SLIM};
+                int aNum[] = {2, 2};
+
+                if (true == isImageListPortrait(images, aTypes, aNum, 4)){
 					return 4;
 				}
 				else {
@@ -1047,11 +1108,16 @@ class ImageRichLinePatternCollection {
 			}
 
 			public int layout(ArrayList<ImageCell> images, int totalWidth) {		
-				
+
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[4];
+
+				adjustImageList(images, adjustImages, baseIndex);
+
 				float matrix[][] = {
-						{images.get(0).yRatio, -images.get(1).yRatio, 0, 0, 0},
+						{adjustImages.get(0).yRatio, -adjustImages.get(1).yRatio, 0, 0, 0},
 						{0, 0, 1, -1, 0},
-						{images.get(0).yRatio, 0, -images.get(2).yRatio, -images.get(3).yRatio, 2*Config.THUMBNAIL_PADDING},
+						{adjustImages.get(0).yRatio, 0, -adjustImages.get(2).yRatio, -adjustImages.get(3).yRatio, 2*Config.THUMBNAIL_PADDING},
 						{1, 1, 1, 0, totalWidth-6*Config.THUMBNAIL_PADDING},						
 				};
 				
@@ -1060,26 +1126,27 @@ class ImageRichLinePatternCollection {
 				calcMatrix(matrix, widths, 4);
 				
 				for (int i=0; i<4; i++){
-					ImageCell image = images.get(i);
+					ImageCell image = adjustImages.get(i);
 					image.outWidth = (int)widths[i];
 					image.outHeight = (int)(image.outWidth * image.yRatio);
 				}
 				
-				images.get(0).outX = 0;
-				images.get(0).outY = 0;
+				adjustImages.get(0).outX = 0;
+				adjustImages.get(0).outY = 0;
 				
-				images.get(1).outX = images.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
-				images.get(1).outY = 0;
+				adjustImages.get(1).outX = adjustImages.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(1).outY = 0;
 				
-				images.get(2).outX = images.get(1).outX + images.get(1).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(2).outY = 0;
+				adjustImages.get(2).outX = adjustImages.get(1).outX + adjustImages.get(1).outWidth + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(2).outY = 0;
 				
-				images.get(3).outX = images.get(2).outX;
-				images.get(3).outY = images.get(2).outHeight + 2*Config.THUMBNAIL_PADDING;
-				
-				return images.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(3).outX = adjustImages.get(2).outX;
+				adjustImages.get(3).outY = adjustImages.get(2).outHeight + 2*Config.THUMBNAIL_PADDING;
+
+				restoreImageList(images, adjustImages, baseIndex);
+
+				return adjustImages.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
 			};
-			
 		};
 		
 		patterns[12] = new ImageRichLinePattern(){
@@ -1093,10 +1160,10 @@ class ImageRichLinePatternCollection {
 					return -1;
 				}
 				
-				if ((IMAGE_PORTRAIT == getImageType(images.get(0)) || IMAGE_SLIM == getImageType(images.get(0))) && 
-					(IMAGE_PORTRAIT == getImageType(images.get(3)) || IMAGE_SLIM == getImageType(images.get(3))) &&
-					(IMAGE_LANDSCAPE == getImageType(images.get(1)) || IMAGE_SQUARE == getImageType(images.get(1))) &&
-					(IMAGE_LANDSCAPE == getImageType(images.get(2)) || IMAGE_SQUARE == getImageType(images.get(2)))){
+                int aTypes[] = {IMAGE_LANDSCAPE, IMAGE_PORTRAIT | IMAGE_SLIM};
+                int aNum[] = {2, 2};
+
+                if (true == isImageListPortrait(images, aTypes, aNum, 4)){
 					return 4;
 				}
 				else {
@@ -1106,11 +1173,16 @@ class ImageRichLinePatternCollection {
 
 			public int layout(ArrayList<ImageCell> images, int totalWidth) {		
 				
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[4];
+
+				adjustImageList(images, adjustImages, baseIndex);
+
 				float matrix[][] = {
-						{images.get(0).yRatio, 0, 0, -images.get(3).yRatio, 0},
-						{0, 1, -1, 0, 0},
-						{images.get(0).yRatio,  -images.get(1).yRatio, -images.get(2).yRatio, 0, 2*Config.THUMBNAIL_PADDING},
-						{1, 1, 0, 1, totalWidth-6*Config.THUMBNAIL_PADDING},						
+						{adjustImages.get(0).yRatio, -adjustImages.get(1).yRatio, 0, 0, 0},
+						{0, 0, 1, -1, 0},
+						{adjustImages.get(0).yRatio, 0, -adjustImages.get(2).yRatio, -adjustImages.get(3).yRatio, 2*Config.THUMBNAIL_PADDING},
+						{1, 1, 1, 0, totalWidth-6*Config.THUMBNAIL_PADDING},						
 				};
 				
 				float widths[] = new float[4];
@@ -1118,26 +1190,27 @@ class ImageRichLinePatternCollection {
 				calcMatrix(matrix, widths, 4);
 				
 				for (int i=0; i<4; i++){
-					ImageCell image = images.get(i);
+					ImageCell image = adjustImages.get(i);
 					image.outWidth = (int)widths[i];
 					image.outHeight = (int)(image.outWidth * image.yRatio);
 				}
 				
-				images.get(0).outX = 0;
-				images.get(0).outY = 0;
+				adjustImages.get(0).outX = 0;
+				adjustImages.get(0).outY = 0;
 				
-				images.get(1).outX = images.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
-				images.get(1).outY = 0;
+				adjustImages.get(2).outX = adjustImages.get(0).outWidth+2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(2).outY = 0;
 				
-				images.get(2).outX = images.get(1).outX;
-				images.get(2).outY = images.get(1).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(3).outX = adjustImages.get(2).outX;
+				adjustImages.get(3).outY = adjustImages.get(2).outHeight + 2*Config.THUMBNAIL_PADDING;
 				
-				images.get(3).outX = images.get(1).outX + images.get(1).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(3).outY = 0;
-				
-				return images.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(1).outX = adjustImages.get(2).outX + adjustImages.get(2).outWidth + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(1).outY = 0;
+
+				restoreImageList(images, adjustImages, baseIndex);
+
+				return adjustImages.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
 			};
-			
 		};
 		
 		patterns[13] = new ImageRichLinePattern(){
@@ -1151,10 +1224,10 @@ class ImageRichLinePatternCollection {
 					return -1;
 				}
 				
-				if ((IMAGE_PORTRAIT == getImageType(images.get(2)) || IMAGE_SLIM == getImageType(images.get(2))) && 
-					(IMAGE_PORTRAIT == getImageType(images.get(3)) || IMAGE_SLIM == getImageType(images.get(3))) &&
-					(IMAGE_LANDSCAPE == getImageType(images.get(0)) || IMAGE_SQUARE == getImageType(images.get(0))) &&
-					(IMAGE_LANDSCAPE == getImageType(images.get(1)) || IMAGE_SQUARE == getImageType(images.get(1)))){
+                int aTypes[] = {IMAGE_LANDSCAPE, IMAGE_PORTRAIT | IMAGE_SLIM};
+                int aNum[] = {2, 2};
+
+                if (true == isImageListPortrait(images, aTypes, aNum, 4)){
 					return 4;
 				}
 				else {
@@ -1164,11 +1237,16 @@ class ImageRichLinePatternCollection {
 
 			public int layout(ArrayList<ImageCell> images, int totalWidth) {		
 				
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[4];
+
+				adjustImageList(images, adjustImages, baseIndex);
+
 				float matrix[][] = {
-						{0, 0, images.get(2).yRatio, -images.get(3).yRatio, 0},
-						{1, -1, 0, 0, 0},
-						{-images.get(0).yRatio, -images.get(1).yRatio, images.get(2).yRatio, 0, 2*Config.THUMBNAIL_PADDING},
-						{1, 0, 1, 1, totalWidth-6*Config.THUMBNAIL_PADDING},						
+						{adjustImages.get(0).yRatio, -adjustImages.get(1).yRatio, 0, 0, 0},
+						{0, 0, 1, -1, 0},
+						{adjustImages.get(0).yRatio, 0, -adjustImages.get(2).yRatio, -adjustImages.get(3).yRatio, 2*Config.THUMBNAIL_PADDING},
+						{1, 1, 1, 0, totalWidth-6*Config.THUMBNAIL_PADDING},						
 				};
 				
 				float widths[] = new float[4];
@@ -1176,26 +1254,27 @@ class ImageRichLinePatternCollection {
 				calcMatrix(matrix, widths, 4);
 				
 				for (int i=0; i<4; i++){
-					ImageCell image = images.get(i);
+					ImageCell image = adjustImages.get(i);
 					image.outWidth = (int)widths[i];
 					image.outHeight = (int)(image.outWidth * image.yRatio);
 				}
 				
-				images.get(0).outX = 0;
-				images.get(0).outY = 0;
+				adjustImages.get(2).outX = 0;
+				adjustImages.get(2).outY = 0;
+
+				adjustImages.get(3).outX = 0;
+				adjustImages.get(3).outY = adjustImages.get(2).outHeight + 2*Config.THUMBNAIL_PADDING;
 				
-				images.get(1).outX = 0;
-				images.get(1).outY = images.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(0).outX = adjustImages.get(2).outWidth+2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(0).outY = 0;
 				
-				images.get(2).outX = images.get(0).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(2).outY = 0;
-				
-				images.get(3).outX = images.get(2).outX + images.get(2).outWidth + 2*Config.THUMBNAIL_PADDING;
-				images.get(3).outY = 0;
-				
-				return images.get(2).outHeight + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(1).outX = adjustImages.get(0).outX + adjustImages.get(0).outWidth + 2*Config.THUMBNAIL_PADDING;
+				adjustImages.get(1).outY = 0;
+
+				restoreImageList(images, adjustImages, baseIndex);
+
+				return adjustImages.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
 			};
-			
 		};
 		
 		patterns[14] = new ImageRichLinePattern(){
@@ -1275,26 +1354,27 @@ class ImageRichLinePatternCollection {
             }
 
             public int match(ArrayList<ImageCell> images) {
-                int aTypes[] = {IMAGE_PORTRAIT | IMAGE_SLIM, IMAGE_LANDSCAPE};
-                int aNum[] = {1, 3};
-            	
+
                 if (images.size() < 4){
                     return -1;
                 }
+                
+                int aTypes[] = {IMAGE_LANDSCAPE | IMAGE_SQUARE, IMAGE_PORTRAIT | IMAGE_SLIM};
+                int aNum[] = {3, 1};
 
-                if (true == isImageListPortrait(images, aTypes, aNum)){
-                    return 4;
-                }
-                else {
-                    return -1;
-                }
+                if (true == isImageListPortrait(images, aTypes, aNum, 4)){
+					return 4;
+				}
+				else {
+					return -1;
+				}
             }
 
             public int layout(ArrayList<ImageCell> images, int totalWidth) {        
-            	ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
-            	int baseIndex[] = new int[4];
-            	
-            	adjustImageList(images, adjustImages, IMAGE_PORTRAIT | IMAGE_SLIM, baseIndex);
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[4];
+
+				adjustImageList(images, adjustImages, baseIndex);
             	
                 float matrix[][] = {
                         {0, 1, -1, 0, 0},
@@ -1337,27 +1417,27 @@ class ImageRichLinePatternCollection {
             }
 
             public int match(ArrayList<ImageCell> images) {
-                
-                int aTypes[] = {IMAGE_PORTRAIT | IMAGE_SLIM, IMAGE_LANDSCAPE};
-                int aNum[] = {1, 3};
-            	
+
                 if (images.size() < 4){
                     return -1;
                 }
 
-                if (true == isImageListPortrait(images, aTypes, aNum)){
-                    return 4;
-                }
-                else {
-                    return -1;
-                }
+                int aTypes[] = {IMAGE_LANDSCAPE | IMAGE_SQUARE, IMAGE_PORTRAIT | IMAGE_SLIM};
+                int aNum[] = {3, 1};
+
+                if (true == isImageListPortrait(images, aTypes, aNum, 4)){
+					return 4;
+				}
+				else {
+					return -1;
+				}
             }
 
             public int layout(ArrayList<ImageCell> images, int totalWidth) {        
-            	ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
-            	int baseIndex[] = new int[4];
-            	
-            	adjustImageList(images, adjustImages, IMAGE_PORTRAIT | IMAGE_SLIM, baseIndex);
+				ArrayList<ImageCell> adjustImages = new ArrayList<ImageCell>();
+				int baseIndex[] = new int[4];
+
+				adjustImageList(images, adjustImages, baseIndex);
             	
                 float matrix[][] = {
                         {0, 1, -1, 0, 0},
@@ -1387,7 +1467,7 @@ class ImageRichLinePatternCollection {
                      
                 adjustImages.get(0).outX = adjustImages.get(1).outX + adjustImages.get(1).outWidth + 2*Config.THUMBNAIL_PADDING;
                 adjustImages.get(0).outY = 0;
-                
+
                 restoreImageList(images, adjustImages, baseIndex);
                 
                 return adjustImages.get(0).outHeight + 2*Config.THUMBNAIL_PADDING;
