@@ -103,6 +103,7 @@ public class GalleryList extends ExpandableListActivity {
 			
 			mImageLists[i].moveToFirst();
 			
+			int j = 0;
 			while (false == mImageLists[i].isAfterLast()){
 				long id = mImageLists[i].getLong(mImageLists[i].getColumnIndex(Media._ID));
 				int width = mImageLists[i].getInt(mImageLists[i].getColumnIndex(Media.WIDTH));
@@ -118,8 +119,9 @@ public class GalleryList extends ExpandableListActivity {
 					width = (int)(height*Config.MAX_WIDTH_HEIGHT_RATIO);
 				}
 
-				galleryLayout.addImage(id, width, height, i);
+				galleryLayout.addImage(id, width, height, j);
 				mImageLists[i].moveToNext();
+				j++;
 			}
 			galleryLayout.addImageFinish();
 			mGalleryLayouts.add(galleryLayout);
@@ -691,6 +693,7 @@ public class GalleryList extends ExpandableListActivity {
 					if(!clipBitmap.isRecycled()){
 						clipBitmap.recycle();
 					}
+					return thumb;
 				}
 
 				//Load original image instead of thumbnail if we enlarge it too-much
@@ -710,6 +713,7 @@ public class GalleryList extends ExpandableListActivity {
 					if(!originalBitmap.isRecycled()){
 						originalBitmap.recycle();
 					}
+					return thumb;
 				}
 
 				return thumb;
