@@ -108,18 +108,20 @@ public class GalleryList extends ExpandableListActivity {
 				long id = mImageLists[i].getLong(mImageLists[i].getColumnIndex(Media._ID));
 				int width = mImageLists[i].getInt(mImageLists[i].getColumnIndex(Media.WIDTH));
 				int height = mImageLists[i].getInt(mImageLists[i].getColumnIndex(Media.HEIGHT));
+				
+				if (width != 0 && height != 0){
+					float ratio = (float) height / (float) width;
+					if (ratio > Config.MAX_WIDTH_HEIGHT_RATIO) {
+						height = (int) (width * Config.MAX_WIDTH_HEIGHT_RATIO);
+					}
 
-				float ratio = (float)height / (float)width;
-				if(ratio > Config.MAX_WIDTH_HEIGHT_RATIO) {
-					height = (int)(width*Config.MAX_WIDTH_HEIGHT_RATIO);
+					ratio = (float) width / (float) height;
+					if (ratio > Config.MAX_WIDTH_HEIGHT_RATIO) {
+						width = (int) (height * Config.MAX_WIDTH_HEIGHT_RATIO);
+					}
+
+					galleryLayout.addImage(id, width, height, j);
 				}
-
-				ratio = (float)width / (float)height;
-				if(ratio > Config.MAX_WIDTH_HEIGHT_RATIO) {
-					width = (int)(height*Config.MAX_WIDTH_HEIGHT_RATIO);
-				}
-
-				galleryLayout.addImage(id, width, height, j);
 				mImageLists[i].moveToNext();
 				j++;
 			}
