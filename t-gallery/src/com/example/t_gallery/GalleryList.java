@@ -603,7 +603,7 @@ public class GalleryList extends ExpandableListActivity {
 		}
 	}
 	
-	private Bitmap clipSlimFlatImage(String path, int width, int height) {
+	private synchronized Bitmap clipSlimFlatImage(String path, int width, int height) {
 		Bitmap bitmap = null;
 
 		try {
@@ -642,6 +642,52 @@ public class GalleryList extends ExpandableListActivity {
 		return bitmap;
 	}
 
+	private synchronized Bitmap adjustThumbmail(Bitmap thumb, int outWidth,
+			int outHeight, int imagePosition, int groupPosition) {
+		if(thumb != null) {
+			float ratio = (float)thumb.getHeight() / (float)thumb.getWidth();
+
+			mImageLists[groupPosition].moveToPosition(imagePosition);
+	        int width = mImageLists[groupPosition].getInt(mImageLists[groupPosition].getColumnIndex(Media.WIDTH));
+	        int height = mImageLists[groupPosition].getInt(mImageLists[groupPosition].getColumnIndex(Media.HEIGHT));
+	        String path = mImageLists[groupPosition].getString(mImageLists[groupPosition].getColumnIndex(Media.DATA));
+
+			//Crop the image a little if it is TOO slim or TOO flat
+			if(ratio > Config.MAX_WIDTH_HEIGHT_RATIO || ratio < 1/Config.MAX_WIDTH_HEIGHT_RATIO) {
+
+				thumb.recycle();
+
+				Bitmap clipBitmap = clipSlimFlatImage(path, width, height);
+
+				thumb = Bitmap.createScaledBitmap (clipBitmap, outWidth, outHeight, false);
+				if(!clipBitmap.isRecycled()){
+					clipBitmap.recycle();
+				}
+				return thumb;
+			}
+
+			//Load original image instead of thumbnail if we enlarge it too-much
+			ratio = (float)thumb.getWidth() / (float) outWidth;
+			if (ratio <= 0.5f) {
+
+				thumb.recycle();
+
+				BitmapFactory.Options bitmapFactoryOptions = new BitmapFactory.Options();
+
+				bitmapFactoryOptions.inJustDecodeBounds = false;
+				bitmapFactoryOptions.inSampleSize = width / outWidth;
+				thumb = BitmapFactory.decodeFile(path, bitmapFactoryOptions);
+
+				Log.v("t-gallery", "ratio: "+ratio + "   ,inSampleSize: "+bitmapFactoryOptions.inSampleSize);
+				return thumb;
+			}
+		}
+		else {
+			//Have this case? Need to check
+		}
+		return thumb;
+	}
+
 	private Cursor mGalleryList;
 	private Cursor mImageLists[];
 	private LruCache<Long, Bitmap> mRamCache;
@@ -664,45 +710,13 @@ public class GalleryList extends ExpandableListActivity {
 			    BitmapFactory.Options options = new BitmapFactory.Options();
 			    
 			    id = params[0];
-				int groupPosition = params[4].intValue();
-				int imagePosion = params[3].intValue();
-				int outWidth = params[1].intValue();
-				Bitmap thumb;
+				Bitmap thumb = Thumbnails.getThumbnail(getContentResolver(), id, Thumbnails.MINI_KIND, options);
 				
-				mImageLists[groupPosition].moveToPosition(imagePosion);
-				int width = mImageLists[groupPosition].getInt(mImageLists[groupPosition].getColumnIndex(Media.WIDTH));
-				int height = mImageLists[groupPosition].getInt(mImageLists[groupPosition].getColumnIndex(Media.HEIGHT));
+				//If handled, adjust will recycle thumb, and return the handled Bitmap
+				thumb = adjustThumbmail(thumb, params[1].intValue(),
+						  params[2].intValue(), params[3].intValue(),
+						  params[4].intValue());
 
-				float yRatio = (float)height/(float)width;
-				//Crop the image a little if it is TOO slim or TOO flat
-				if(yRatio > Config.MAX_WIDTH_HEIGHT_RATIO || yRatio < 1/Config.MAX_WIDTH_HEIGHT_RATIO) {
-
-					Log.i("t-gallery", "Crop the image for TOO slim TOO flat: width = "+width+"  , height = "+height);
-
-					String path = mImageLists[groupPosition].getString(mImageLists[groupPosition].getColumnIndex(Media.DATA));
-
-					Bitmap clipBitmap = clipSlimFlatImage(path, width, height);
-
-					thumb = Bitmap.createScaledBitmap (clipBitmap, params[1].intValue(), params[2].intValue(), false);
-					if(!clipBitmap.isRecycled()){
-						clipBitmap.recycle();
-					}
-				}
-				else if (((float)width/(float)outWidth) <= 0.5f) { //Load original image instead of thumbnail if we enlarge it too-much
-
-					Log.i("t-gallery", "Load original image instead of thumbnail: width = "+width+"  , outwidth = "+params[1].intValue());
-
-					String path = mImageLists[groupPosition].getString(mImageLists[groupPosition].getColumnIndex(Media.DATA));
-
-					BitmapFactory.Options bitmapFactoryOptions = new BitmapFactory.Options();
-
-					bitmapFactoryOptions.inJustDecodeBounds = false;
-					bitmapFactoryOptions.inSampleSize = width/outWidth;
-					thumb = BitmapFactory.decodeFile(path, bitmapFactoryOptions);
-				}
-				else {
-					thumb = Thumbnails.getThumbnail(getContentResolver(), id, Thumbnails.MINI_KIND, options);
-				}
 
 				return thumb;
 				/*int height = thumb.getHeight();
