@@ -4,5 +4,6 @@
     <string name="app_name">t-gallery</string>
     <string name="collapse">Collapse</string>
     <string name="menu_settings">Settings</string>
+    <string name="title_activity_image_detail">ImageDetail</string>
 
 </resources>

@@ -8,12 +8,11 @@ import java.util.TimerTask;
 
 import android.app.ExpandableListActivity;
 import android.content.Context;
+import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.BitmapRegionDecoder;
-import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
@@ -29,6 +28,7 @@ import android.util.LruCache;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.View;
+import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.view.ViewPropertyAnimator;
 import android.view.ViewTreeObserver;
@@ -84,14 +84,17 @@ public class GalleryList extends ExpandableListActivity {
 				Config.ALBUM_WHERE_CLAUSE, 
 				null, null);
 	
-		mImageLists = new Cursor[mGalleryList.getCount()];
+		mImageLists = new ArrayList<ArrayList<String>>();
 		
 		mGalleryLayouts = new ArrayList<GalleryLayout>();
 		
 		for (int i=0; i<mGalleryList.getCount(); i++){
+			
+			ArrayList<String> imageList = new ArrayList<String>();
+			
 			mGalleryList.moveToPosition(i);
 			String galleryId = mGalleryList.getString(mGalleryList.getColumnIndex(Media.BUCKET_ID));
-			mImageLists[i] = getContentResolver().query(
+			Cursor listCursor = getContentResolver().query(
 					Config.MEDIA_URI, 
 					Config.IMAGE_PROJECTION, 
 					Config.IMAGE_WHERE_CLAUSE, 
@@ -101,13 +104,15 @@ public class GalleryList extends ExpandableListActivity {
 			
 			GalleryLayout galleryLayout = new GalleryLayout(1080);
 			
-			mImageLists[i].moveToFirst();
+			listCursor.moveToFirst();
 			
 			int j = 0;
-			while (false == mImageLists[i].isAfterLast()){
-				long id = mImageLists[i].getLong(mImageLists[i].getColumnIndex(Media._ID));
-				int width = mImageLists[i].getInt(mImageLists[i].getColumnIndex(Media.WIDTH));
-				int height = mImageLists[i].getInt(mImageLists[i].getColumnIndex(Media.HEIGHT));
+			
+			while (false == listCursor.isAfterLast()){
+				long id = listCursor.getLong(listCursor.getColumnIndex(Media._ID));
+				int width = listCursor.getInt(listCursor.getColumnIndex(Media.WIDTH));
+				int height = listCursor.getInt(listCursor.getColumnIndex(Media.HEIGHT));
+		        String path = listCursor.getString(listCursor.getColumnIndex(Media.DATA));
 				
 				if (width != 0 && height != 0){
 					float ratio = (float) height / (float) width;
@@ -122,11 +127,14 @@ public class GalleryList extends ExpandableListActivity {
 
 					galleryLayout.addImage(id, width, height, j);
 				}
-				mImageLists[i].moveToNext();
+				listCursor.moveToNext();
+				
 				j++;
+				imageList.add(path);
 			}
 			galleryLayout.addImageFinish();
 			mGalleryLayouts.add(galleryLayout);
+			mImageLists.add(imageList);
 		}
 	}
 	
@@ -644,20 +652,22 @@ public class GalleryList extends ExpandableListActivity {
 
 	private synchronized Bitmap adjustThumbmail(Bitmap thumb, int outWidth,
 			int outHeight, int imagePosition, int groupPosition) {
+		
 		if(thumb != null) {
 			float ratio = (float)thumb.getHeight() / (float)thumb.getWidth();
-
-			mImageLists[groupPosition].moveToPosition(imagePosition);
-	        int width = mImageLists[groupPosition].getInt(mImageLists[groupPosition].getColumnIndex(Media.WIDTH));
-	        int height = mImageLists[groupPosition].getInt(mImageLists[groupPosition].getColumnIndex(Media.HEIGHT));
-	        String path = mImageLists[groupPosition].getString(mImageLists[groupPosition].getColumnIndex(Media.DATA));
+	        String path = mImageLists.get(groupPosition).get(imagePosition);
 
 			//Crop the image a little if it is TOO slim or TOO flat
 			if(ratio > Config.MAX_WIDTH_HEIGHT_RATIO || ratio < 1/Config.MAX_WIDTH_HEIGHT_RATIO) {
-
+				Log.v("t-gallery", "crop image ratio: "+ratio);
 				thumb.recycle();
 
-				Bitmap clipBitmap = clipSlimFlatImage(path, width, height);
+				BitmapFactory.Options bitmapFactoryOptions = new BitmapFactory.Options();
+
+				bitmapFactoryOptions.inJustDecodeBounds = true;
+				BitmapFactory.decodeFile(path, bitmapFactoryOptions);
+				
+				Bitmap clipBitmap = clipSlimFlatImage(path, bitmapFactoryOptions.outWidth, bitmapFactoryOptions.outHeight);
 
 				thumb = Bitmap.createScaledBitmap (clipBitmap, outWidth, outHeight, false);
 				if(!clipBitmap.isRecycled()){
@@ -674,11 +684,14 @@ public class GalleryList extends ExpandableListActivity {
 
 				BitmapFactory.Options bitmapFactoryOptions = new BitmapFactory.Options();
 
+				bitmapFactoryOptions.inJustDecodeBounds = true;
+				BitmapFactory.decodeFile(path, bitmapFactoryOptions);
+				
 				bitmapFactoryOptions.inJustDecodeBounds = false;
-				bitmapFactoryOptions.inSampleSize = width / outWidth;
+				bitmapFactoryOptions.inSampleSize = bitmapFactoryOptions.outWidth / outWidth;
 				thumb = BitmapFactory.decodeFile(path, bitmapFactoryOptions);
 
-				Log.v("t-gallery", "ratio: "+ratio + "   ,inSampleSize: "+bitmapFactoryOptions.inSampleSize);
+				Log.v("t-gallery", "load original ratio: "+ratio + "   ,inSampleSize: "+bitmapFactoryOptions.inSampleSize);
 				return thumb;
 			}
 		}
@@ -689,10 +702,10 @@ public class GalleryList extends ExpandableListActivity {
 	}
 
 	private Cursor mGalleryList;
-	private Cursor mImageLists[];
+	private ArrayList<ArrayList<String>> mImageLists;
 	private LruCache<Long, Bitmap> mRamCache;
 	
-	private ArrayList<GalleryLayout> mGalleryLayouts;
+	public static  ArrayList<GalleryLayout> mGalleryLayouts;
 		
 	class GalleryListAdapter extends BaseExpandableListAdapter{
 		
@@ -833,8 +846,7 @@ public class GalleryList extends ExpandableListActivity {
 			
 			/*Fill in the content*/
 	        for (int i=0; i<Config.THUMBNAILS_PER_LINE; i++){
-	        	
-	        	
+
 	        	if (i >= currentLine.getImageNum()){
 	        		holder.icons[i].setVisibility(View.GONE);
 	        	}
@@ -851,12 +863,22 @@ public class GalleryList extends ExpandableListActivity {
 	        		}
 	        		else {
 	        			BitmapWorkerTask task = new BitmapWorkerTask(holder.icons[i]);
-					    task.execute(currentLine.getImage(i).id, (long)image.outWidth, (long)image.outHeight, (long)image.postion, (long)groupPosition);
+					    task.execute(image.id, (long)image.outWidth, (long)image.outHeight, (long)image.position, (long)groupPosition);
 					    holder.task[i] = task;
 					    holder.icons[i].setScaleType(ImageView.ScaleType.FIT_XY);
 					    holder.icons[i].setImageResource(R.drawable.grey);	
 	        		}
 
+					int viewId = image.position +groupPosition* (int) Math.pow(10, 5);
+
+					holder.icons[i].setId(viewId);
+
+					holder.icons[i].setOnClickListener(new OnClickListener() {
+						@Override
+						public void onClick(View v) {
+							entryImageDetail(v);
+						}
+					});
 	        	}
 	        	
 			}
@@ -867,7 +889,6 @@ public class GalleryList extends ExpandableListActivity {
 		@Override
 		public int getChildrenCount(int groupPosition) {
 			return mGalleryLayouts.get(groupPosition).getLineNum();
-			//return (mImageLists[groupPosition].getCount() + Config.THUMBNAILS_PER_LINE - 1)/Config.THUMBNAILS_PER_LINE;
 		}
 
 		@Override
@@ -877,7 +898,7 @@ public class GalleryList extends ExpandableListActivity {
 
 		@Override
 		public int getGroupCount() {
-			return mImageLists.length;
+			return mGalleryList.getCount();
 		}
 
 		@Override
@@ -902,7 +923,7 @@ public class GalleryList extends ExpandableListActivity {
 			}
 			
 			mGalleryList.moveToPosition(groupPosition);
-			int count = mImageLists[groupPosition].getCount();
+			int count = mImageLists.get(groupPosition).size();
 			TextView text = (TextView)item.getChildAt(0);
 			text.setText(mGalleryList.getString(mGalleryList.getColumnIndex(Media.BUCKET_DISPLAY_NAME))+" ("+count+")");
 			
@@ -916,7 +937,7 @@ public class GalleryList extends ExpandableListActivity {
 
 		@Override
 		public boolean isChildSelectable(int groupPosition, int childPosition) {
-			return false;
+			return true;
 		}
 		
 		public void setRecyclable(boolean flag, View item){
@@ -1033,7 +1054,7 @@ public class GalleryList extends ExpandableListActivity {
 			container.addView(view, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 			
 			mGalleryList.moveToPosition(groupIndex);
-			int count = mImageLists[groupIndex].getCount();
+			int count = mImageLists.get(groupIndex).size();
 			view.setText(mGalleryList.getString(mGalleryList.getColumnIndex(Media.BUCKET_DISPLAY_NAME))+" ("+count+")");
 
 			view.setOnClickListener(new View.OnClickListener() {
@@ -1106,5 +1127,36 @@ public class GalleryList extends ExpandableListActivity {
 			}
 		}
 		
+	}
+	
+	//viewId = image.position +groupPosition* (int) Math.pow(10, 5);;
+	public void entryImageDetail(View v) {
+
+		int viewId = v.getId();
+		int groupPosion = 0, clickIndex = 0;
+		for (int i = 0; i < 5; i++) {
+			clickIndex += (viewId % 10) * Math.pow(10, i);
+			viewId /= 10;
+		}
+
+		groupPosion = viewId;
+
+		int clickItemInfo[] = new int[4];
+		v.getLocationOnScreen (clickItemInfo);
+		clickItemInfo[2] = v.getWidth();
+		clickItemInfo[3] = v.getHeight();
+		
+		Log.v("klwang", "image click groupPosion: " + groupPosion
+				+ "   ,itemIndex: " + clickIndex + "  ,X: " + clickItemInfo[0]
+				+ "  ,Y: " + clickItemInfo[1] + "  ,width: " + clickItemInfo[2]
+				+ "  ,height: " + clickItemInfo[3]);
+		
+        final Intent i = new Intent(this, ImageDetail.class);
+        i.putStringArrayListExtra(ImageDetail.IMAGE_LIST, mImageLists.get(groupPosion));
+        i.putExtra(ImageDetail.CLICK_INDEX, clickIndex);
+        i.putExtra(ImageDetail.CLICK_ITEM_INFO, clickItemInfo);
+        startActivity(i);
+         
+        //overridePendingTransition(R.anim.zoomin, R.anim.zoomout);
 	}
 }

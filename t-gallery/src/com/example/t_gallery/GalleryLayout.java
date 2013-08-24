@@ -3,15 +3,13 @@ package com.example.t_gallery;
 import java.util.ArrayList;
 import java.util.Random;
 
-import android.util.Log;
-
 import com.example.t_gallery.GalleryList.Config;
 
 
 class ImageCell {
-	ImageCell(long aId, int aWidth, int aHeight, int aPostion){
+	ImageCell(long aId, int aWidth, int aHeight, int aPosition){
 		id = aId;
-		postion = aPostion;
+		position = aPosition;
 	    inWidth = aWidth;
 	    inHeight = aHeight;
 	    yRatio = (float)inHeight / (float)inWidth;
@@ -32,7 +30,7 @@ class ImageCell {
 	
 	
 	public long id = 0;
-	public int postion = 0;
+	public int position = 0;
 	
 	public int inWidth = 0;
 	public int inHeight = 0;
@@ -55,8 +53,8 @@ class ImageLineGroup {
 		imageList = new ArrayList<ImageCell>();
 	}
 
-	public void addImage(long id, int width, int height, int postion){
-		ImageCell image = new ImageCell(id, width, height, postion);
+	public void addImage(long id, int width, int height, int position){
+		ImageCell image = new ImageCell(id, width, height, position);
 		imageList.add(image);
 	}
 	
@@ -1606,9 +1604,9 @@ public class GalleryLayout {
 		}
 	}
 	
-	public void addImage(long id, int width, int height, int postion){
+	public void addImage(long id, int width, int height, int position){
 		
-		itemBuffer.add(new ImageCell(id, width, height, postion));
+		itemBuffer.add(new ImageCell(id, width, height, position));
 		
 		if (itemBuffer.isFull()){
 			processImageBuffer();
